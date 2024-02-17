@@ -14,12 +14,10 @@ export default async (request: Request, context: Context) => {
     const req = new Request(_url, request);
     // 设置请求头的 'origin' 字段为 'https://github.com'
     req.headers.set('origin', 'https://github.com');
-    req.headers.set('access-control-allow-origin', '*');
-    req.headers.set('access-control-allow-methods', '*');
-    req.headers.set('access-control-allow-headers', '*');
     
     // 使用 fetch API 发送请求，并等待响应
-    const res = await fetch(req);
+    // 在请求的 URL 前加上代理服务的 URL
+    const res = await fetch('https://cors-anywhere.herokuapp.com/' + req.url); // 修改了这一行
     // 创建一个新的响应对象，其主体和状态与原始响应相同
     let newRes = new Response(res.body, res);
 
