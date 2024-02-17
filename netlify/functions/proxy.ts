@@ -1,85 +1,37 @@
+// 导入 Context 类型定义
 import { Context } from "@netlify/edge-functions";
 
-const pickHeaders = (headers: Headers, keys: (string | RegExp)[]): Headers => {
-  const picked = new Headers();
-  for (const key of headers.keys()) {
-    if (keys.some((k) => (typeof k === "string" ? k === key : k.test(key)))) {
-      const value = headers.get(key);
-      if (typeof value === "string") {
-        picked.set(key, value);
-      }
-    }
-  }
-  return picked;
-};
-
-const CORS_HEADERS: Record<string, string> = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "*",
-  "access-control-allow-headers": "*",
-};
-
+// 定义一个异步函数作为默认导出
 export default async (request: Request, context: Context) => {
+    // 从请求中获取 URL
+    const _url = new URL(request.url);
+    // 保存原始主机名
+    const originalHostname = _url.hostname;
 
-  if (request.method === "OPTIONS") {
-    return new Response(null, {
-      headers: CORS_HEADERS,
-    });
-  }
+    // 将 URL 的主机名更改为 "github.com"
+    _url.hostname = "github.com";
+    // 创建一个新的请求对象，其 URL 已更改为 "github.com"
+    const req = new Request(_url, request);
+    // 设置请求头的 'origin' 字段为 'https://github.com'
+    req.headers.set('origin', 'https://github.com');
+    req.headers.set('access-control-allow-origin', '*');
+    req.headers.set('access-control-allow-methods', '*');
+    req.headers.set('access-control-allow-headers', '*');
+    
+    // 使用 fetch API 发送请求，并等待响应
+    const res = await fetch(req);
+    // 创建一个新的响应对象，其主体和状态与原始响应相同
+    let newRes = new Response(res.body, res);
 
-  const { pathname, searchParams } = new URL(request.url);
-  if(pathname === "/") {
-    let blank_html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Google PaLM API proxy on Netlify Edge</title>
-</head>
-<body>
-  <h1 id="google-palm-api-proxy-on-netlify-edge">Google PaLM API proxy on Netlify Edge</h1>
-  <p>Tips: This project uses a reverse proxy to solve problems such as location restrictions in Google APIs. </p>
-  <p>If you have any of the following requirements, you may need the support of this project.</p>
-  <ol>
-  <li>When you see the error message &quot;User location is not supported for the API use&quot; when calling the Google PaLM API</li>
-  <li>You want to customize the Google PaLM API</li>
-  </ol>
-  <p>For technical discussions, please visit <a href="https://simonmy.com/posts/使用netlify反向代理google-palm-api.html">https://simonmy.com/posts/使用netlify反向代理google-palm-api.html</a></p>
-</body>
-</html>
-    `
-    return new Response(blank_html, {
-      headers: {
-        ...CORS_HEADERS,
-        "content-type": "text/html"
-      },
-    });
-  }
-
-  const url = new URL(pathname, "https://generativelanguage.googleapis.com");
-  searchParams.delete("_path");
-
-  searchParams.forEach((value, key) => {
-    url.searchParams.append(key, value);
-  });
-
-  const headers = pickHeaders(request.headers, ["content-type", "x-goog-api-client", "x-goog-api-key", "accept-encoding"]);
-
-  const response = await fetch(url, {
-    body: request.body,
-    method: request.method,
-    duplex: 'half',
-    headers,
-  });
-
-  const responseHeaders = {
-    ...CORS_HEADERS,
-    ...Object.fromEntries(response.headers),
-    "content-encoding": null
-  };
-
-  return new Response(response.body, {
-    headers: responseHeaders,
-    status: response.status
-  });
+    // 从响应头中获取 'location' 字段
+    let location = newRes.headers.get('location');
+    // 如果 'location' 字段存在且不为空
+    if (location !== null && location !== "") {
+      // 将 'location' 字段中的 '://github.com' 替换为原始主机名
+      location = location.replace('://github.com', '://' + originalHostname);
+      // 设置新响应的 'location' 字段
+      newRes.headers.set('location', location);
+    }
+    // 返回新的响应对象
+    return newRes;
 };
